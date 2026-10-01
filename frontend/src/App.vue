@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 const today = new Date()
 const dateString = (value) => value.toISOString().slice(0, 10)
@@ -37,6 +37,7 @@ const defaultRoomTypeForm = () => ({
   area: 32,
   description: '',
   amenities: '',
+  coverImage: '',
 })
 
 const defaultRoomForm = () => ({
@@ -150,7 +151,10 @@ const selectedGuestProfile = ref(null)
 const selectedReservationOps = ref(null)
 const customerReservationPage = ref(createPager())
 const customerRoomTypes = ref([])
-const customerRooms = ref([])
+// 指定入住/离店日期下真正可预订的房间，来源为 /api/v1/rooms/available
+const customerAvailableRooms = ref([])
+const customerAvailabilityLoading = ref(false)
+const customerAvailabilityError = ref('')
 const customerProfile = ref(null)
 const roomCalendar = ref([])
 const unreadNotificationCount = ref(0)
@@ -233,14 +237,16 @@ const totalChargePreview = computed(
 )
 
 const customerSelectedRoom = computed(() =>
-  customerRooms.value.find((item) => item.id === Number(customerReservationForm.value.roomId))
+  customerAvailableRooms.value.find((item) => item.id === Number(customerReservationForm.value.roomId))
 )
 
 const customerSelectedRoomType = computed(() =>
   customerRoomTypes.value.find((item) => item.id === customerSelectedRoom.value?.roomTypeId)
 )
 
-const customerRoomRate = computed(() => Number(customerSelectedRoomType.value?.basePrice || 0))
+const customerRoomRate = computed(() =>
+  Number(customerSelectedRoom.value?.basePrice || customerSelectedRoomType.value?.basePrice || 0)
+)
 
 const customerStayNights = computed(() => {
   if (!customerReservationForm.value.checkInDate || !customerReservationForm.value.checkOutDate) return 0
@@ -330,6 +336,13 @@ const roleText = (role) =>
     STAFF: '员工',
   }[role] || role || '—')
 
+const memberLevelText = (level) =>
+  ({
+    REGULAR: '普通会员',
+    GOLD: '金卡会员',
+    PLATINUM: '白金会员',
+  }[level] || level || '普通会员')
+
 const actionText = (action) =>
   ({
     CREATE_RESERVATION: '创建订单',
@@ -411,7 +424,7 @@ async function requestJson(url, options = {}) {
   }
 
   if (response.status === 403) {
-    throw new Error(result.message === 'Forbidden' ? '当前账号没有权限执行这个操作' : (result.message || '当前账号没有权限执行这个操作'))
+    throw new Error(result.message || '当前账号没有权限执行这个操作')
   }
 
   if (!response.ok || !result.success) {
@@ -533,8 +546,60 @@ async function loadCustomerProfile() {
 
 async function loadCustomerRoomTypes() {
   customerRoomTypes.value = await requestJson('/api/v1/customer/room-types')
-  customerRooms.value = await requestJson('/api/v1/rooms')
 }
+
+/**
+ * 按当前选择的入住/离店日期查询可预订房间。
+ * 房间能否预订取决于「日期区间是否与已有预约重叠」，不能只看房间的静态状态，
+ * 否则用户会选到已被占用的房间、提交后才被拒绝。
+ */
+async function loadCustomerAvailableRooms() {
+  const { checkInDate, checkOutDate } = customerReservationForm.value
+
+  if (!checkInDate || !checkOutDate) {
+    customerAvailableRooms.value = []
+    customerAvailabilityError.value = '请先选择入住日期与离店日期'
+    return
+  }
+
+  if (checkOutDate <= checkInDate) {
+    customerAvailableRooms.value = []
+    customerReservationForm.value.roomId = ''
+    customerAvailabilityError.value = '离店日期需晚于入住日期'
+    return
+  }
+
+  customerAvailabilityLoading.value = true
+  customerAvailabilityError.value = ''
+  try {
+    const query = queryString({ checkIn: checkInDate, checkOut: checkOutDate })
+    const rooms = await requestJson(`/api/v1/rooms/available?${query}`)
+    customerAvailableRooms.value = Array.isArray(rooms) ? rooms : []
+    // 日期变化后，原先选中的房间可能已不再可订，清空选择避免提交时被后端拒绝
+    const stillBookable = customerAvailableRooms.value.some(
+      (item) => item.id === Number(customerReservationForm.value.roomId)
+    )
+    if (!stillBookable) {
+      customerReservationForm.value.roomId = ''
+    }
+  } catch (error) {
+    customerAvailableRooms.value = []
+    customerReservationForm.value.roomId = ''
+    customerAvailabilityError.value = error.message
+  } finally {
+    customerAvailabilityLoading.value = false
+  }
+}
+
+// 进入「在线预订」页或改动日期时，重新查询可订房间
+watch(
+  () => [customerTab.value, customerReservationForm.value.checkInDate, customerReservationForm.value.checkOutDate],
+  () => {
+    if (!isCustomer.value || customerTab.value !== 'booking') return
+    loadCustomerAvailableRooms()
+  },
+  { immediate: true }
+)
 
 async function loadCustomerReservationPage(pageNo = customerReservationPage.value.pageNo) {
   const query = queryString({ pageNo, pageSize: customerReservationPage.value.pageSize })
@@ -680,7 +745,7 @@ function logout() {
   currentUser.value = null
   customerProfile.value = null
   customerRoomTypes.value = []
-  customerRooms.value = []
+  customerAvailableRooms.value = []
   customerReservationPage.value = createPager()
   localStorage.removeItem('hotel_admin_token')
   localStorage.removeItem('hotel_access_token')
@@ -721,6 +786,10 @@ function resetUserForm() {
 
 function resetCustomerReservationForm() {
   customerReservationForm.value = defaultCustomerReservationForm()
+  // 重置后日期回到默认值，watch 可能因值未变化而不触发，这里主动刷新一次可订房间
+  if (isCustomer.value && customerTab.value === 'booking') {
+    loadCustomerAvailableRooms()
+  }
 }
 
 function startEditRoomType(item) {
@@ -1140,6 +1209,11 @@ function roomTypeName(roomTypeId) {
   return source.find((item) => item.id === roomTypeId)?.name || 'Unknown'
 }
 
+function roomTypeCover(roomTypeId) {
+  const source = isCustomer.value ? customerRoomTypes.value : roomTypeList.value
+  return source.find((item) => item.id === roomTypeId)?.coverImage || ''
+}
+
 function goPage(loader, pagerRef, nextPage) {
   if (nextPage < 1 || nextPage > pagerRef.value.totalPages) return
   loader(nextPage)
@@ -1183,9 +1257,11 @@ onMounted(async () => {
         <div class="login-copy">
           <div class="poster-shell">
             <div class="brand-stage poster-stage">
-              <img class="brand-logo brand-logo-login" src="/hotel-logo.png" alt="Hotel Logo" />
-              <div class="brand-copy">
-                <h1 class="login-title">轻量酒店工作台</h1>
+              <div class="brand-lockup brand-lockup-title">
+                <span class="brand-mark brand-mark-login" role="img" aria-label="五星级酒店"></span>
+                <div class="brand-copy">
+                  <h1 class="login-title">轻量酒店工作台</h1>
+                </div>
               </div>
             </div>
 
@@ -1283,12 +1359,12 @@ onMounted(async () => {
     <template v-else-if="isCustomer">
       <header class="hero">
         <div class="hero-head">
-          <div class="brand-lockup">
-            <img class="brand-logo brand-logo-header" src="/hotel-logo.png" alt="Hotel Logo" />
+          <div class="brand-lockup brand-lockup-header">
+            <span class="brand-mark brand-mark-header" role="img" aria-label="五星级酒店"></span>
             <div class="hero-copy compact-copy">
               <p class="eyebrow">Guest Portal</p>
               <h1>住客中心</h1>
-              <p class="copy-text">欢迎回来，{{ customerProfile?.displayName || currentUser?.displayName }} · 会员等级 {{ customerProfile?.memberLevel || 'REGULAR' }}</p>
+              <p class="copy-text">欢迎回来，{{ customerProfile?.displayName || currentUser?.displayName }} · 会员等级 {{ memberLevelText(customerProfile?.memberLevel) }}</p>
             </div>
           </div>
 
@@ -1315,7 +1391,7 @@ onMounted(async () => {
       </section>
 
       <main v-if="!loading" class="content">
-        <section v-if="customerTab === 'home'" class="panel-grid">
+        <section v-if="customerTab === 'home'" class="dashboard-stack">
           <section class="panel">
             <div class="section-head">
               <div>
@@ -1324,15 +1400,20 @@ onMounted(async () => {
               </div>
               <p class="section-note">浏览房型与基础价格</p>
             </div>
-            <div class="table-list">
-              <article v-for="item in customerRoomTypes" :key="item.id" class="table-row">
-                <div>
+            <div class="room-gallery">
+              <article v-for="item in customerRoomTypes" :key="item.id" class="room-card">
+                <figure>
+                  <img v-if="item.coverImage" :src="item.coverImage" :alt="item.name" />
+                  <span v-else>暂无图片</span>
+                </figure>
+                <div class="room-card-body">
                   <p class="list-title">{{ item.name }}</p>
                   <p class="list-subtitle">{{ currency(item.basePrice) }} / 晚 · {{ item.maxGuests }} 位 · {{ item.area }}㎡</p>
                   <p class="list-subtitle">{{ item.bedType }} · {{ item.amenities }}</p>
                 </div>
               </article>
             </div>
+            <p v-if="!customerRoomTypes.length" class="empty-note">暂无可订房型。</p>
           </section>
 
           <section class="panel">
@@ -1341,6 +1422,7 @@ onMounted(async () => {
                 <p class="section-label">Member</p>
                 <h2>住客账户</h2>
               </div>
+              <button class="secondary-button small" @click="customerTab = 'booking'">去预订</button>
             </div>
             <div class="table-list">
               <article class="summary-row">
@@ -1348,7 +1430,7 @@ onMounted(async () => {
                   <p class="list-title">当前账户</p>
                   <p class="list-subtitle">{{ customerProfile?.displayName || currentUser?.displayName }}</p>
                 </div>
-                <strong>{{ customerProfile?.memberLevel || 'REGULAR' }}</strong>
+                <strong>{{ memberLevelText(customerProfile?.memberLevel) }}</strong>
               </article>
               <article class="summary-row">
                 <div>
@@ -1382,19 +1464,32 @@ onMounted(async () => {
               <label>身份证<input v-model="customerReservationForm.idCard" type="text" /></label>
               <label>
                 房间
-                <select v-model="customerReservationForm.roomId">
-                  <option value="">请选择</option>
-                  <option v-for="item in customerRooms.filter((room) => room.status === 'AVAILABLE')" :key="item.id" :value="item.id">
-                    {{ item.roomNumber }} · {{ roomTypeName(item.roomTypeId) }}
+                <select
+                  v-model="customerReservationForm.roomId"
+                  :disabled="customerAvailabilityLoading || !customerAvailableRooms.length"
+                >
+                  <option value="">{{ customerAvailabilityLoading ? '查询中…' : '请选择' }}</option>
+                  <option v-for="item in customerAvailableRooms" :key="item.id" :value="item.id">
+                    {{ item.roomNumber }} · {{ item.roomTypeName }} · {{ currency(item.basePrice) }}
                   </option>
                 </select>
               </label>
+              <p v-if="customerAvailabilityLoading" class="field-hint full">正在查询该日期区间内的可订房间…</p>
+              <p v-else-if="customerAvailabilityError" class="field-hint is-warn full">{{ customerAvailabilityError }}</p>
+              <p v-else-if="!customerAvailableRooms.length" class="field-hint is-warn full">
+                该日期区间内没有可预订的房间，请调整入住或离店日期。
+              </p>
+              <p v-else class="field-hint full">该日期区间内可预订 {{ customerAvailableRooms.length }} 间房</p>
               <label>入住日期<input v-model="customerReservationForm.checkInDate" type="date" /></label>
               <label>离店日期<input v-model="customerReservationForm.checkOutDate" type="date" /></label>
               <label>入住人数<input v-model="customerReservationForm.guestCount" type="number" min="1" /></label>
               <label>房价/晚<input :value="currency(customerRoomRate)" disabled /></label>
               <label>入住晚数<input :value="customerStayNights" disabled /></label>
               <label>预估房费<input :value="currency(customerEstimatedAmount)" disabled /></label>
+              <div v-if="customerSelectedRoomType?.coverImage" class="cover-preview full">
+                <img :src="customerSelectedRoomType.coverImage" :alt="customerSelectedRoomType.name" />
+                <p class="list-subtitle">{{ customerSelectedRoomType.name }} · {{ customerSelectedRoomType.bedType }}</p>
+              </div>
               <label class="full">特殊需求<textarea v-model="customerReservationForm.specialRequest" rows="3"></textarea></label>
               <div class="form-actions full">
                 <button class="primary-button" type="submit">{{ actionLoading ? '提交中...' : '提交预订' }}</button>
@@ -1440,6 +1535,7 @@ onMounted(async () => {
               <p class="section-label">My Reservations</p>
               <h2>我的订单</h2>
             </div>
+            <p class="section-note">共 {{ customerReservationPage.total }} 条</p>
           </div>
           <div class="table-list">
             <article v-for="item in customerReservationPage.records" :key="item.id" class="table-row">
@@ -1452,6 +1548,7 @@ onMounted(async () => {
                 {{ statusText(item.status) }}
               </span>
             </article>
+            <p v-if="!customerReservationPage.records.length" class="empty-note">还没有订单，去「预订」页提交第一条吧。</p>
           </div>
           <div class="pager">
             <button class="secondary-button small" @click="goPage(loadCustomerReservationPage, customerReservationPage, customerReservationPage.pageNo - 1)">上一页</button>
@@ -1485,7 +1582,7 @@ onMounted(async () => {
                 <div>
                   <p class="list-title">会员等级</p>
                 </div>
-                <strong>{{ customerProfile?.memberLevel || 'REGULAR' }}</strong>
+                <strong>{{ memberLevelText(customerProfile?.memberLevel) }}</strong>
               </article>
             </div>
           </section>
@@ -1517,12 +1614,11 @@ onMounted(async () => {
     <template v-else>
       <header class="hero">
         <div class="hero-head">
-          <div class="brand-lockup">
-            <img class="brand-logo brand-logo-header" src="/hotel-logo.png" alt="Hotel Logo" />
+          <div class="brand-lockup brand-lockup-header">
+            <span class="brand-mark brand-mark-header" role="img" aria-label="五星级酒店"></span>
             <div class="hero-copy compact-copy">
               <p class="eyebrow">Hotel Management System</p>
               <h1>日常工作台</h1>
-              <p class="copy-text">当前登录：{{ currentUser?.displayName }} · {{ roleLabel }} · 账号 {{ currentUser?.username }}</p>
             </div>
           </div>
 
@@ -1658,7 +1754,7 @@ onMounted(async () => {
                     <p class="list-title">{{ item.title }}</p>
                     <p class="list-subtitle">{{ item.content }}</p>
                   </div>
-                  <span class="pill pill-yellow">{{ item.category }}</span>
+                  <span class="pill pill-yellow">{{ notificationCategoryText(item.category) }}</span>
                 </article>
               </div>
               <p v-else class="empty-note">暂无未读提醒，前台节奏很稳。</p>
@@ -1741,7 +1837,7 @@ onMounted(async () => {
             >
               <div class="calendar-room-meta">
                 <p class="list-title">{{ row.roomNumber }}</p>
-                <p class="list-subtitle">{{ row.roomTypeName }} · {{ row.floor }}F · {{ row.cleanStatus }}</p>
+                <p class="list-subtitle">{{ row.roomTypeName }} · {{ row.floor }}F · {{ statusText(row.cleanStatus) }}</p>
               </div>
               <div
                 v-for="day in row.days"
@@ -1754,10 +1850,10 @@ onMounted(async () => {
                 <div class="calendar-tooltip">
                   <p>{{ row.roomNumber }} · {{ row.roomTypeName }}</p>
                   <p>日期：{{ day.date }}</p>
-                  <p>状态：{{ day.status }}</p>
+                  <p>状态：{{ statusText(day.status) }}</p>
                   <p v-if="day.reservationNo">订单：{{ day.reservationNo }}</p>
                   <p v-if="day.guestName">住客：{{ day.guestName }}</p>
-                  <p>清洁：{{ row.cleanStatus }}</p>
+                  <p>清洁：{{ statusText(row.cleanStatus) }}</p>
                 </div>
               </div>
             </div>
@@ -1781,6 +1877,13 @@ onMounted(async () => {
                 <label>面积<input v-model="roomTypeForm.area" type="number" min="1" /></label>
                 <label class="full">描述<textarea v-model="roomTypeForm.description" rows="3"></textarea></label>
                 <label class="full">设施<input v-model="roomTypeForm.amenities" type="text" /></label>
+                <label class="full">
+                  封面图路径
+                  <input v-model="roomTypeForm.coverImage" type="text" placeholder="如 /room-types/urban-queen.jpg" />
+                </label>
+                <div v-if="roomTypeForm.coverImage" class="cover-preview full">
+                  <img :src="roomTypeForm.coverImage" :alt="roomTypeForm.name || '房型封面'" />
+                </div>
                 <div class="form-actions full">
                   <button class="primary-button" type="submit">{{ actionLoading ? '保存中...' : '保存房型' }}</button>
                   <button class="secondary-button" type="button" @click="resetRoomTypeForm">重置</button>
@@ -1796,22 +1899,27 @@ onMounted(async () => {
                 <p class="section-label">Query</p>
                 <h2>房型列表</h2>
               </div>
+              <p class="section-note">共 {{ roomTypePage.total }} 个房型</p>
             </div>
             <div class="filter-bar">
-              <input v-model="roomTypeFilters.keyword" placeholder="搜索房型名称" />
+              <input v-model="roomTypeFilters.keyword" placeholder="搜索房型名称" @keyup.enter="loadRoomTypePage(1)" />
               <button class="secondary-button" @click="loadRoomTypePage(1)">筛选</button>
             </div>
             <div class="table-list">
-              <article v-for="item in roomTypePage.records" :key="item.id" class="table-row">
-                <div>
+              <article v-for="item in roomTypePage.records" :key="item.id" class="table-row media-row">
+                <img v-if="item.coverImage" class="media-thumb" :src="item.coverImage" :alt="item.name" />
+                <span v-else class="media-thumb is-empty">暂无图片</span>
+                <div class="table-row-body">
                   <p class="list-title">{{ item.name }}</p>
-                  <p class="list-subtitle">{{ currency(item.basePrice) }} · {{ item.maxGuests }} 位 · {{ item.area }}㎡</p>
-                </div>
-                <div v-if="isAdmin" class="inline-actions">
-                  <button class="secondary-button small" @click="startEditRoomType(item)">编辑</button>
-                  <button class="secondary-button small danger" @click="removeItem('roomType', item.id)">删除</button>
+                  <p class="list-subtitle">{{ currency(item.basePrice) }} · {{ item.maxGuests }} 位 · {{ item.area }}㎡ · {{ item.bedType }}</p>
+                  <p class="list-subtitle">{{ item.amenities }}</p>
+                  <div v-if="isAdmin" class="inline-actions row-actions">
+                    <button class="secondary-button small" @click="startEditRoomType(item)">编辑</button>
+                    <button class="secondary-button small danger" @click="removeItem('roomType', item.id)">删除</button>
+                  </div>
                 </div>
               </article>
+              <p v-if="!roomTypePage.records.length" class="empty-note">没有符合条件的房型。</p>
             </div>
             <div class="pager">
               <button class="secondary-button small" @click="goPage(loadRoomTypePage, roomTypePage, roomTypePage.pageNo - 1)">上一页</button>
@@ -1843,17 +1951,17 @@ onMounted(async () => {
                 <label>
                   销售状态
                   <select v-model="roomForm.status">
-                    <option value="AVAILABLE">AVAILABLE</option>
-                    <option value="OCCUPIED">OCCUPIED</option>
-                    <option value="MAINTENANCE">MAINTENANCE</option>
+                    <option value="AVAILABLE">空房可售</option>
+                    <option value="OCCUPIED">在住占用</option>
+                    <option value="MAINTENANCE">维修停用</option>
                   </select>
                 </label>
                 <label>
                   清洁状态
                   <select v-model="roomForm.cleanStatus">
-                    <option value="READY">READY</option>
-                    <option value="CLEANING">CLEANING</option>
-                    <option value="BLOCKED">BLOCKED</option>
+                    <option value="READY">已清洁</option>
+                    <option value="CLEANING">清洁中</option>
+                    <option value="BLOCKED">锁房</option>
                   </select>
                 </label>
                 <div class="form-actions full">
@@ -1871,38 +1979,42 @@ onMounted(async () => {
                 <p class="section-label">Filters</p>
                 <h2>房间列表</h2>
               </div>
+              <p class="section-note">共 {{ roomPage.total }} 间</p>
             </div>
             <div class="filter-grid">
-              <input v-model="roomFilters.keyword" placeholder="房号搜索" />
+              <input v-model="roomFilters.keyword" placeholder="房号搜索" @keyup.enter="loadRoomPage(1)" />
               <select v-model="roomFilters.roomTypeId">
                 <option value="">全部房型</option>
                 <option v-for="item in roomTypeList" :key="item.id" :value="item.id">{{ item.name }}</option>
               </select>
               <select v-model="roomFilters.status">
                 <option value="">全部销售状态</option>
-                <option value="AVAILABLE">AVAILABLE</option>
-                <option value="OCCUPIED">OCCUPIED</option>
-                <option value="MAINTENANCE">MAINTENANCE</option>
+                <option value="AVAILABLE">空房可售</option>
+                <option value="OCCUPIED">在住占用</option>
+                <option value="MAINTENANCE">维修停用</option>
               </select>
               <select v-model="roomFilters.cleanStatus">
                 <option value="">全部清洁状态</option>
-                <option value="READY">READY</option>
-                <option value="CLEANING">CLEANING</option>
-                <option value="BLOCKED">BLOCKED</option>
+                <option value="READY">已清洁</option>
+                <option value="CLEANING">清洁中</option>
+                <option value="BLOCKED">锁房</option>
               </select>
               <button class="secondary-button" @click="loadRoomPage(1)">筛选</button>
             </div>
             <div class="table-list">
-              <article v-for="item in roomPage.records" :key="item.id" class="table-row">
-                <div>
+              <article v-for="item in roomPage.records" :key="item.id" class="table-row media-row">
+                <img v-if="roomTypeCover(item.roomTypeId)" class="media-thumb" :src="roomTypeCover(item.roomTypeId)" :alt="roomTypeName(item.roomTypeId)" />
+                <span v-else class="media-thumb is-empty">暂无图片</span>
+                <div class="table-row-body">
                   <p class="list-title">Room {{ item.roomNumber }} · {{ roomTypeName(item.roomTypeId) }}</p>
                   <p class="list-subtitle">楼层 {{ item.floor }}F · {{ statusText(item.status) }} · {{ statusText(item.cleanStatus) }}</p>
-                </div>
-                <div v-if="isAdmin" class="inline-actions">
-                  <button class="secondary-button small" @click="startEditRoom(item)">编辑</button>
-                  <button class="secondary-button small danger" @click="removeItem('room', item.id)">删除</button>
+                  <div v-if="isAdmin" class="inline-actions row-actions">
+                    <button class="secondary-button small" @click="startEditRoom(item)">编辑</button>
+                    <button class="secondary-button small danger" @click="removeItem('room', item.id)">删除</button>
+                  </div>
                 </div>
               </article>
+              <p v-if="!roomPage.records.length" class="empty-note">没有符合条件的房间。</p>
             </div>
             <div class="pager">
               <button class="secondary-button small" @click="goPage(loadRoomPage, roomPage, roomPage.pageNo - 1)">上一页</button>
@@ -1995,7 +2107,7 @@ onMounted(async () => {
                 <article class="summary-row">
                   <div>
                     <p class="list-title">{{ selectedReservationOps.guestName }} · {{ selectedReservationOps.roomNumber }}</p>
-                    <p class="list-subtitle">{{ selectedReservationOps.checkInDate }} 至 {{ selectedReservationOps.checkOutDate }} · {{ selectedReservationOps.status }}</p>
+                    <p class="list-subtitle">{{ selectedReservationOps.checkInDate }} 至 {{ selectedReservationOps.checkOutDate }} · {{ statusText(selectedReservationOps.status) }}</p>
                   </div>
                   <strong>{{ currency(selectedReservationOps.totalAmount) }}</strong>
                 </article>
@@ -2052,6 +2164,7 @@ onMounted(async () => {
                   </div>
                 </div>
               </article>
+              <p v-if="!reservationPage.records.length" class="empty-note">没有符合条件的订单。</p>
             </div>
             <div class="pager">
               <button class="secondary-button small" @click="goPage(loadReservationPage, reservationPage, reservationPage.pageNo - 1)">上一页</button>
@@ -2064,12 +2177,13 @@ onMounted(async () => {
         <section v-if="activeTab === 'finance'" class="panel">
           <div class="section-head">
             <div>
-              <p class="section-label">财务流水</p>
+              <p class="section-label">Finance Ledger</p>
               <h2>财务流水</h2>
             </div>
+            <p class="section-note">共 {{ financePage.total }} 笔</p>
           </div>
           <div class="filter-grid">
-            <input v-model="financeFilters.reservationId" placeholder="订单 ID" />
+            <input v-model="financeFilters.reservationId" placeholder="订单 ID" @keyup.enter="loadFinancePage(1)" />
             <select v-model="financeFilters.transactionType">
               <option value="">全部类型</option>
               <option value="ROOM_FEE">房费入账</option>
@@ -2104,6 +2218,7 @@ onMounted(async () => {
                 <strong>{{ currency(item.amount) }}</strong>
               </div>
             </article>
+            <p v-if="!financePage.records.length" class="empty-note">当前筛选范围内没有财务流水。</p>
           </div>
           <div class="pager">
             <button class="secondary-button small" @click="goPage(loadFinancePage, financePage, financePage.pageNo - 1)">上一页</button>
@@ -2115,13 +2230,14 @@ onMounted(async () => {
         <section v-if="activeTab === 'logs'" class="panel">
           <div class="section-head">
             <div>
-              <p class="section-label">操作日志</p>
+              <p class="section-label">Audit Trail</p>
               <h2>操作日志</h2>
             </div>
+            <p class="section-note">共 {{ logPage.total }} 条</p>
           </div>
           <div class="filter-grid">
-            <input v-model="logFilters.reservationId" placeholder="订单 ID" />
-            <input v-model="logFilters.operatorUsername" placeholder="操作人" />
+            <input v-model="logFilters.reservationId" placeholder="订单 ID" @keyup.enter="loadLogPage(1)" />
+            <input v-model="logFilters.operatorUsername" placeholder="操作人" @keyup.enter="loadLogPage(1)" />
             <select v-model="logFilters.actionType">
               <option value="">全部动作</option>
               <option value="CREATE_RESERVATION">创建订单</option>
@@ -2139,8 +2255,9 @@ onMounted(async () => {
                 <p class="list-subtitle">变更前：{{ snapshotText(item.beforeSnapshot) }}</p>
                 <p class="list-subtitle">变更后：{{ snapshotText(item.afterSnapshot) }}</p>
               </div>
-              <span class="pill pill-blue">{{ formatDateTime(item.createdAt) }}</span>
+              <span class="log-time">{{ formatDateTime(item.createdAt) }}</span>
             </article>
+            <p v-if="!logPage.records.length" class="empty-note">当前筛选范围内没有操作日志。</p>
           </div>
           <div class="pager">
             <button class="secondary-button small" @click="goPage(loadLogPage, logPage, logPage.pageNo - 1)">上一页</button>
@@ -2152,9 +2269,10 @@ onMounted(async () => {
         <section v-if="activeTab === 'messages'" class="panel">
           <div class="section-head">
             <div>
-              <p class="section-label">消息提醒</p>
+              <p class="section-label">Notifications</p>
               <h2>消息提醒</h2>
             </div>
+            <p class="section-note">未读 {{ unreadNotificationCount }} 条 / 共 {{ notificationPage.total }} 条</p>
           </div>
           <div class="filter-grid">
             <select v-model="notificationFilters.status">
@@ -2182,6 +2300,7 @@ onMounted(async () => {
                 <button v-if="item.status === 'UNREAD'" class="secondary-button small" @click="markNotificationRead(item)">标记已读</button>
               </div>
             </article>
+            <p v-if="!notificationPage.records.length" class="empty-note">当前筛选范围内没有提醒消息。</p>
           </div>
           <div class="pager">
             <button class="secondary-button small" @click="goPage(loadNotificationPage, notificationPage, notificationPage.pageNo - 1)">上一页</button>
@@ -2205,9 +2324,9 @@ onMounted(async () => {
               <label>
                 会员等级
                 <select v-model="guestForm.memberLevel">
-                  <option value="REGULAR">REGULAR</option>
-                  <option value="GOLD">GOLD</option>
-                  <option value="PLATINUM">PLATINUM</option>
+                  <option value="REGULAR">普通会员</option>
+                  <option value="GOLD">金卡会员</option>
+                  <option value="PLATINUM">白金会员</option>
                 </select>
               </label>
               <label>备注<textarea v-model="guestForm.remark" rows="3"></textarea></label>
@@ -2226,19 +2345,19 @@ onMounted(async () => {
               </div>
             </div>
             <div class="filter-grid">
-              <input v-model="guestFilters.keyword" placeholder="姓名 / 手机 / 身份证" />
+              <input v-model="guestFilters.keyword" placeholder="姓名 / 手机 / 身份证" @keyup.enter="loadGuestPage(1)" />
               <select v-model="guestFilters.memberLevel">
                 <option value="">全部会员等级</option>
-                <option value="REGULAR">REGULAR</option>
-                <option value="GOLD">GOLD</option>
-                <option value="PLATINUM">PLATINUM</option>
+                <option value="REGULAR">普通会员</option>
+                <option value="GOLD">金卡会员</option>
+                <option value="PLATINUM">白金会员</option>
               </select>
               <button class="secondary-button" @click="loadGuestPage(1)">筛选</button>
             </div>
             <div class="table-list">
               <article v-for="item in guestPage.records" :key="item.id" class="table-row">
                 <div>
-                  <p class="list-title">{{ item.fullName }} · {{ item.memberLevel }}</p>
+                  <p class="list-title">{{ item.fullName }} · {{ memberLevelText(item.memberLevel) }}</p>
                   <p class="list-subtitle">{{ item.phone }} · {{ item.idCard }}</p>
                 </div>
                 <div class="inline-actions">
@@ -2247,6 +2366,7 @@ onMounted(async () => {
                   <button v-if="isAdmin" class="secondary-button small danger" @click="removeItem('guest', item.id)">删除</button>
                 </div>
               </article>
+              <p v-if="!guestPage.records.length" class="empty-note">没有符合条件的住客。</p>
             </div>
             <div class="pager">
               <button class="secondary-button small" @click="goPage(loadGuestPage, guestPage, guestPage.pageNo - 1)">上一页</button>
@@ -2306,15 +2426,15 @@ onMounted(async () => {
               <label>
                 用户角色
                 <select v-model="userForm.role">
-                  <option value="ADMIN">ADMIN</option>
-                  <option value="FRONT_DESK">FRONT_DESK</option>
+                  <option value="ADMIN">系统管理员</option>
+                  <option value="FRONT_DESK">前台专员</option>
                 </select>
               </label>
               <label>
                 账户状态
                 <select v-model="userForm.status">
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="DISABLED">DISABLED</option>
+                  <option value="ACTIVE">启用</option>
+                  <option value="DISABLED">停用</option>
                 </select>
               </label>
               <label>
@@ -2336,16 +2456,16 @@ onMounted(async () => {
               </div>
             </div>
             <div class="filter-grid">
-              <input v-model="userFilters.keyword" placeholder="用户名 / 显示名称" />
+              <input v-model="userFilters.keyword" placeholder="用户名 / 显示名称" @keyup.enter="loadUserPage(1)" />
               <select v-model="userFilters.role">
                 <option value="">全部角色</option>
-                <option value="ADMIN">ADMIN</option>
-                <option value="FRONT_DESK">FRONT_DESK</option>
+                <option value="ADMIN">系统管理员</option>
+                <option value="FRONT_DESK">前台专员</option>
               </select>
               <select v-model="userFilters.status">
                 <option value="">全部状态</option>
-                <option value="ACTIVE">ACTIVE</option>
-                <option value="DISABLED">DISABLED</option>
+                <option value="ACTIVE">启用</option>
+                <option value="DISABLED">停用</option>
               </select>
               <button class="secondary-button" @click="loadUserPage(1)">筛选</button>
             </div>
@@ -2360,6 +2480,7 @@ onMounted(async () => {
                   <button class="secondary-button small danger" @click="removeItem('user', item.id)">删除</button>
                 </div>
               </article>
+              <p v-if="!userPage.records.length" class="empty-note">没有符合条件的账户。</p>
             </div>
             <div class="pager">
               <button class="secondary-button small" @click="goPage(loadUserPage, userPage, userPage.pageNo - 1)">上一页</button>

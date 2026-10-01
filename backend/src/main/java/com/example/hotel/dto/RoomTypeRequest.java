@@ -21,6 +21,7 @@ public record RoomTypeRequest(
         @NotBlank(message = "description is required")
         String description,
         @NotBlank(message = "amenities is required")
-        String amenities
+        String amenities,
+        String coverImage
 ) {
 }

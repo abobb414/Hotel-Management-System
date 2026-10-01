@@ -84,5 +84,6 @@ public class RoomTypeServiceImpl extends ServiceImpl<RoomTypeMapper, RoomType> i
         roomType.setArea(request.area());
         roomType.setDescription(request.description());
         roomType.setAmenities(request.amenities());
+        roomType.setCoverImage(request.coverImage());
     }
 }

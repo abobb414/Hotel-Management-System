@@ -69,9 +69,9 @@ public class SecurityConfig {
                 )
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, ex) ->
-                                GlobalExceptionHandler.writeJsonError(response, 401, "Unauthorized"))
+                                GlobalExceptionHandler.writeJsonError(response, 401, "登录状态已失效，请重新登录"))
                         .accessDeniedHandler((request, response, ex) ->
-                                GlobalExceptionHandler.writeJsonError(response, 403, "Forbidden"))
+                                GlobalExceptionHandler.writeJsonError(response, 403, "当前账号没有权限执行这个操作"))
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

@@ -22,7 +22,8 @@ CREATE TABLE room_type (
     bed_type VARCHAR(64) NOT NULL,
     area INT NOT NULL,
     description VARCHAR(255) NOT NULL,
-    amenities VARCHAR(255) NOT NULL
+    amenities VARCHAR(255) NOT NULL,
+    cover_image VARCHAR(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE room (
@@ -136,10 +137,10 @@ CREATE TABLE notification_message (
     INDEX idx_notification_related (related_type, related_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT INTO room_type (name, base_price, max_guests, bed_type, area, description, amenities) VALUES
-('Urban Queen', 498.00, 2, '1.8m Queen Bed', 32, 'Suitable for business trips and city short stays.', 'Breakfast, WiFi, Smart TV'),
-('Garden Twin', 568.00, 2, '2 x 1.2m Twin Bed', 36, 'Quiet floor with courtyard-facing windows.', 'Breakfast, WiFi, Tea Set'),
-('Executive Suite', 968.00, 4, '1.8m Queen Bed + Sofa', 62, 'Living room layout for family or VIP guests.', 'Breakfast, Mini Bar, Bathtub');
+INSERT INTO room_type (name, base_price, max_guests, bed_type, area, description, amenities, cover_image) VALUES
+('Urban Queen', 498.00, 2, '1.8m Queen Bed', 32, 'Suitable for business trips and city short stays.', 'Breakfast, WiFi, Smart TV', '/room-types/urban-queen.jpg'),
+('Garden Twin', 568.00, 2, '2 x 1.2m Twin Bed', 36, 'Quiet floor with courtyard-facing windows.', 'Breakfast, WiFi, Tea Set', '/room-types/garden-twin.jpg'),
+('Executive Suite', 968.00, 4, '1.8m Queen Bed + Sofa', 62, 'Living room layout for family or VIP guests.', 'Breakfast, Mini Bar, Bathtub', '/room-types/executive-suite.jpg');
 
 INSERT INTO room (room_number, room_type_id, floor, status, clean_status) VALUES
 ('801', 1, 8, 'AVAILABLE', 'READY'),
@@ -165,3 +166,32 @@ INSERT INTO reservation (
 ('RES20260422080001', 1, 2, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 2 DAY), 2, 996.00, 68.00, 0.00, 300.00, 50.00, 1314.00, 'BOOKED', 'DIRECT', 'Window side preferred', NOW()),
 ('RES20260421093015', 2, 4, DATE_SUB(CURDATE(), INTERVAL 1 DAY), DATE_ADD(CURDATE(), INTERVAL 1 DAY), 2, 1136.00, 88.00, 0.00, 300.00, 0.00, 1524.00, 'CHECKED_IN', 'OTA', 'Need extra towel', NOW()),
 ('RES20260420114530', 3, 5, DATE_ADD(CURDATE(), INTERVAL 3 DAY), DATE_ADD(CURDATE(), INTERVAL 5 DAY), 3, 1936.00, 128.00, 160.00, 500.00, 100.00, 2624.00, 'BOOKED', 'DIRECT', 'Family crib', NOW());
+
+-- 财务流水与操作日志：种子订单对应的初始凭证，保证流水页 / 日志页有可核对的数据
+INSERT INTO financial_transaction (reservation_id, reservation_no, transaction_type, amount, direction, remark) VALUES
+(1, 'RES20260422080001', 'ROOM_FEE', 996.00, 'CHARGE', '房费入账 · 2 晚'),
+(1, 'RES20260422080001', 'BREAKFAST_FEE', 68.00, 'CHARGE', '早餐加购'),
+(1, 'RES20260422080001', 'DEPOSIT', 300.00, 'CHARGE', '押金预收'),
+(1, 'RES20260422080001', 'COUPON', 50.00, 'DISCOUNT', '优惠券抵扣'),
+(2, 'RES20260421093015', 'ROOM_FEE', 1136.00, 'CHARGE', '房费入账 · 2 晚'),
+(2, 'RES20260421093015', 'BREAKFAST_FEE', 88.00, 'CHARGE', '早餐加购'),
+(2, 'RES20260421093015', 'DEPOSIT', 300.00, 'CHARGE', '押金预收'),
+(3, 'RES20260420114530', 'ROOM_FEE', 1936.00, 'CHARGE', '房费入账 · 2 晚'),
+(3, 'RES20260420114530', 'BREAKFAST_FEE', 128.00, 'CHARGE', '早餐加购'),
+(3, 'RES20260420114530', 'EXTRA_BED_FEE', 160.00, 'CHARGE', '加床费用'),
+(3, 'RES20260420114530', 'DEPOSIT', 500.00, 'CHARGE', '押金预收'),
+(3, 'RES20260420114530', 'COUPON', 100.00, 'DISCOUNT', '优惠券抵扣');
+
+INSERT INTO operation_log (
+    reservation_id, room_id, operator_username, operator_role,
+    action_type, description, before_snapshot, after_snapshot
+) VALUES
+(1, 2, 'admin', 'ADMIN', 'CREATE_RESERVATION', '创建订单 RES20260422080001', NULL,
+ 'reservationNo=RES20260422080001,status=BOOKED,roomId=2,checkIn=2026-10-01,checkOut=2026-10-03,total=1314.00'),
+(2, 4, 'admin', 'ADMIN', 'CREATE_RESERVATION', '创建订单 RES20260421093015', NULL,
+ 'reservationNo=RES20260421093015,status=BOOKED,roomId=4,checkIn=2026-09-30,checkOut=2026-10-02,total=1524.00'),
+(2, 4, 'frontdesk', 'FRONT_DESK', 'STATUS_CHANGE', '订单状态 BOOKED -> CHECKED_IN',
+ 'reservationNo=RES20260421093015,status=BOOKED,roomId=4,checkIn=2026-09-30,checkOut=2026-10-02,total=1524.00',
+ 'reservationNo=RES20260421093015,status=CHECKED_IN,roomId=4,checkIn=2026-09-30,checkOut=2026-10-02,total=1524.00'),
+(3, 5, 'admin', 'ADMIN', 'CREATE_RESERVATION', '创建订单 RES20260420114530', NULL,
+ 'reservationNo=RES20260420114530,status=BOOKED,roomId=5,checkIn=2026-10-04,checkOut=2026-10-06,total=2624.00');

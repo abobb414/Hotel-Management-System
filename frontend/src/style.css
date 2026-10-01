@@ -1,12 +1,20 @@
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,600&display=swap');
 
+/* ==========================================================================
+   1. 设计令牌
+   全站字号只保留 8 档，控件高度只保留 2 档，圆角只保留 3 档。
+   新增样式一律引用令牌，不要再写裸数值。
+   ========================================================================== */
 :root {
+  /* 色板 */
   --bg: #f7f6f3;
   --surface: rgba(255, 253, 248, 0.92);
   --surface-2: #faf8f2;
+  --surface-3: #f1eee7;
   --text: #1d1a16;
   --muted: #79746d;
   --border: #e6e0d5;
+  --border-strong: #d9d2c5;
   --line: rgba(29, 26, 22, 0.08);
   --accent: #151311;
   --accent-soft: #f1eee7;
@@ -18,13 +26,51 @@
   --pale-yellow-text: #956400;
   --pale-red: #fdebec;
   --pale-red-text: #9f2f2d;
-  --sans: 'Geist', 'SF Pro Display', 'Helvetica Neue', sans-serif;
-  --serif: 'Newsreader', 'Times New Roman', serif;
+
+  /* 字体 */
+  --sans: 'Geist', 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', sans-serif;
+  --serif: 'Newsreader', 'Songti SC', 'Times New Roman', serif;
   --mono: 'SF Mono', 'JetBrains Mono', monospace;
+
+  /* 字号阶梯：11 / 12 / 13 / 14 / 16 / 20 / 24 / 34 */
+  --fs-2xs: 11px;   /* 角标、极少数辅助文案 */
+  --fs-xs: 12px;    /* 标签、栏目标题、pill */
+  --fs-sm: 13px;    /* 次要说明、表内补充信息 */
+  --fs-base: 14px;  /* 正文与全部表单控件 */
+  --fs-md: 16px;    /* 列表主标题 */
+  --fs-lg: 20px;    /* 指标数值 */
+  --fs-xl: 24px;    /* 次级指标 */
+  --fs-2xl: 34px;   /* 区块标题 h2 */
+  --fs-display: clamp(3rem, 4.8vw, 5.1rem);      /* 登录页主标题 */
+  --fs-hero: clamp(2.4rem, 4vw, 3.3rem);         /* 内页主标题 */
+
+  /* 行高 */
+  --lh-tight: 1.2;
+  --lh-base: 1.6;
+
+  /* 控件 */
+  --h-control: 42px;
+  --h-control-sm: 34px;
+
+  /* 圆角 */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-pill: 999px;
+
+  /* 卡片高亮/内嵌卡片相对正文栅格外扩的距离。
+     用途：让「选中行的高亮底色」和「面板内嵌卡片的边框」共用同一条外扩线，
+     正文则统一落在栅格线上 —— 全站只保留两条对齐线。 */
+  --card-bleed: 12px;
+
+  /* 品牌图标墨迹占画布比例（源图 1600×1600 实测）：上 2.0625%、下 91.6875% */
+  --mark-ink-top: 0.020625;
+  --mark-ink-ratio: 0.89625;
+
   color: var(--text);
   background: var(--bg);
   font-family: var(--sans);
-  line-height: 1.6;
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
   font-weight: 400;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -32,6 +78,9 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ==========================================================================
+   2. 基础
+   ========================================================================== */
 * {
   box-sizing: border-box;
 }
@@ -52,19 +101,25 @@ input,
 select,
 textarea {
   font: inherit;
+  font-size: var(--fs-base);
+  color: var(--text);
 }
 
 code {
   font-family: var(--mono);
+  font-size: var(--fs-sm);
   padding: 2px 6px;
   border-radius: 4px;
-  background: #f0ede6;
+  background: var(--surface-3);
 }
 
 #app {
   min-height: 100dvh;
 }
 
+/* ==========================================================================
+   3. 布局骨架
+   ========================================================================== */
 .shell {
   width: min(1240px, calc(100% - 28px));
   margin: 0 auto;
@@ -78,7 +133,7 @@ code {
 .login-panel,
 .tip-card {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   background: var(--surface);
   backdrop-filter: blur(12px);
 }
@@ -96,236 +151,6 @@ code {
   gap: 18px;
 }
 
-.brand-lockup {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.brand-logo {
-  display: block;
-  object-fit: contain;
-  filter: drop-shadow(0 10px 24px rgba(177, 135, 48, 0.16));
-}
-
-.brand-logo-login {
-  width: 138px;
-  height: 138px;
-}
-
-.brand-logo-header {
-  width: 52px;
-  height: 52px;
-  flex: 0 0 auto;
-}
-
-.brand-stage {
-  display: grid;
-  gap: 18px;
-  align-content: start;
-}
-
-.brand-copy {
-  display: grid;
-  gap: 10px;
-}
-
-.poster-shell {
-  display: grid;
-  gap: 20px;
-  width: min(560px, 100%);
-  padding: 8px 0;
-}
-
-.poster-stage {
-  gap: 16px;
-}
-
-.eyebrow,
-.section-label,
-.section-note,
-.copy-text,
-.list-subtitle,
-.metric-card span,
-.stat-card span {
-  color: var(--muted);
-}
-
-.eyebrow,
-.section-label {
-  margin: 0;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-h1,
-h2 {
-  margin: 0;
-  font-family: var(--serif);
-  font-weight: 600;
-  letter-spacing: -0.04em;
-  line-height: 1;
-}
-
-h1 {
-  max-width: 10ch;
-  margin-top: 10px;
-  font-size: clamp(2.8rem, 5vw, 4.8rem);
-}
-
-.login-title {
-  max-width: none;
-  margin-top: 0;
-  white-space: nowrap;
-  font-size: clamp(3rem, 4.8vw, 5.1rem);
-}
-
-h2 {
-  margin-top: 6px;
-  font-size: 34px;
-}
-
-.copy-text {
-  max-width: 58ch;
-  margin-top: 12px;
-  font-size: 15px;
-}
-
-.brand-lead {
-  max-width: 42ch;
-  margin-top: 0;
-  font-size: 16px;
-}
-
-.compact-copy h1 {
-  max-width: none;
-  font-size: clamp(2.4rem, 4vw, 3.3rem);
-}
-
-.compact-copy .copy-text {
-  margin-top: 8px;
-}
-
-.login-panel {
-  overflow: hidden;
-}
-
-.window-bar {
-  display: flex;
-  gap: 8px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-}
-
-.window-bar span {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: #d7d1c8;
-}
-
-.stat-card,
-.compact-card {
-  min-height: 150px;
-  padding: 18px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface-2);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.stat-card strong {
-  font-size: 36px;
-  font-weight: 600;
-  letter-spacing: -0.04em;
-}
-
-.toolbar,
-.status-strip {
-  margin-top: 16px;
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.tabs,
-.toolbar-actions,
-.inline-actions,
-.form-actions,
-.auth-switch,
-.auth-audience {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.tab,
-.secondary-button,
-.primary-button {
-  position: relative;
-  min-height: 42px;
-  padding: 0 14px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  cursor: pointer;
-  transition: transform 0.2s ease, background-color 0.2s ease;
-}
-
-.tab,
-.secondary-button {
-  background: #fff;
-  color: var(--text);
-}
-
-.tab.is-active,
-.primary-button {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #fff;
-}
-
-.tab-badge {
-  position: absolute;
-  top: -7px;
-  right: -7px;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 999px;
-  border: 2px solid var(--surface);
-  background: var(--pale-red);
-  color: var(--pale-red-text);
-  font-size: 11px;
-  line-height: 16px;
-  font-weight: 700;
-}
-
-.secondary-button:hover,
-.tab:hover {
-  background: var(--accent-soft);
-}
-
-.danger {
-  color: var(--pale-red-text);
-}
-
-.small {
-  min-height: 34px;
-  padding: 0 10px;
-  font-size: 13px;
-}
-
-.primary-button:active,
-.secondary-button:active,
-.tab:active {
-  transform: scale(0.98);
-}
-
 .content,
 .panel-grid,
 .split-layout,
@@ -333,6 +158,10 @@ h2 {
 .dashboard-stack {
   display: grid;
   gap: 16px;
+  /* grid 子项默认 min-width: auto —— 会被最宽的内容顶穿。
+     房态日历的最小列宽是 220 + 7×94 = 878px，正是靠这一行才不会把整页撑宽、
+     从而让 .calendar-table 自己的 overflow-x 真正生效。 */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .content {
@@ -353,14 +182,19 @@ h2 {
 }
 
 .panel {
+  /* 同上：作为 grid / flex 子项时允许收缩到容器宽度，而不是被内容撑开。 */
+  min-width: 0;
   padding: 24px;
 }
 
 .ops-card {
-  margin-bottom: 18px;
-  padding: 18px;
+  /* 内嵌卡片：负外边距抵消自身内边距，边框落到 --card-bleed 线、内容回到正文栅格线。
+     否则「面板 24px padding + 卡片 18px padding」会叠成双重缩进，
+     卡内文字比同一列下方的列表正文右移 18px。 */
+  margin: 0 calc(var(--card-bleed) * -1) 18px;
+  padding: var(--card-bleed);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   background: var(--surface-2);
 }
 
@@ -395,6 +229,439 @@ h2 {
   justify-content: flex-end;
 }
 
+/* ==========================================================================
+   4. 排版
+   ========================================================================== */
+h1,
+h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+h1 {
+  max-width: 12ch;
+  margin-top: 8px;
+  font-size: var(--fs-hero);
+}
+
+h2 {
+  margin-top: 6px;
+  font-size: var(--fs-2xl);
+}
+
+.login-title {
+  max-width: none;
+  margin-top: 0;
+  white-space: nowrap;
+  font-size: var(--fs-display);
+}
+
+.eyebrow,
+.section-label {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.eyebrow,
+.section-label,
+.section-note,
+.copy-text,
+.list-subtitle,
+.metric-card span,
+.stat-card span {
+  color: var(--muted);
+}
+
+.section-note {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+
+.copy-text {
+  max-width: 58ch;
+  margin: 10px 0 0;
+  font-size: var(--fs-base);
+}
+
+.list-title {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.list-subtitle {
+  margin: 4px 0 0;
+  font-size: var(--fs-sm);
+}
+
+.empty-note {
+  margin: 0;
+  font-size: var(--fs-base);
+  color: var(--muted);
+}
+
+/* 表单内的即时提示：默认弱化，异常时用警示色 */
+.field-hint {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.field-hint.is-warn {
+  color: var(--pale-yellow-text);
+}
+
+.feedback {
+  margin: 0;
+  font-size: var(--fs-base);
+}
+
+.feedback.error {
+  color: var(--pale-red-text);
+}
+
+/* ==========================================================================
+   5. 控件：按钮 / 输入框 / 下拉框 / 文本域
+   全站只有这一套外观。裸 input、select 挂在任何容器里都走这里的定义。
+   ========================================================================== */
+.tab,
+.secondary-button,
+.primary-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--h-control);
+  padding: 0 16px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong);
+  background: #fff;
+  font-size: var(--fs-base);
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+}
+
+.tab {
+  border-color: var(--border);
+}
+
+.tab.is-active,
+.primary-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.secondary-button:hover,
+.tab:hover {
+  background: var(--accent-soft);
+}
+
+.primary-button:hover {
+  background: #2a2622;
+}
+
+.primary-button:active,
+.secondary-button:active,
+.tab:active {
+  transform: scale(0.98);
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.small {
+  min-height: var(--h-control-sm);
+  padding: 0 12px;
+  font-size: var(--fs-sm);
+}
+
+.tab-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  border: 2px solid var(--surface);
+  background: var(--pale-red);
+  color: var(--pale-red-text);
+  font-size: var(--fs-2xs);
+  line-height: 16px;
+  font-weight: 700;
+}
+
+.danger {
+  color: var(--pale-red-text);
+}
+
+/* 统一输入类控件：filter 区、编辑器、登录面板、日历、入住操作共用 */
+.filter-bar input,
+.filter-bar select,
+.filter-grid input,
+.filter-grid select,
+.ops-grid input,
+.ops-grid select,
+.editor-form input,
+.editor-form select,
+.editor-form textarea,
+.login-panel input {
+  width: 100%;
+  min-height: var(--h-control);
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background-color: #fff;
+  font-size: var(--fs-base);
+  line-height: var(--h-control);
+  color: var(--text);
+}
+
+.editor-form textarea {
+  min-height: 96px;
+  padding: 10px 12px;
+  line-height: var(--lh-base);
+  resize: vertical;
+}
+
+.filter-bar input::placeholder,
+.filter-grid input::placeholder,
+.ops-grid input::placeholder,
+.editor-form input::placeholder,
+.editor-form textarea::placeholder,
+.login-panel input::placeholder {
+  color: #a8a29a;
+}
+
+/* 下拉框：去掉原生箭头，统一自绘 chevron */
+.filter-bar select,
+.filter-grid select,
+.ops-grid select,
+.editor-form select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%2379746d' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  background-size: 12px 8px;
+  cursor: pointer;
+}
+
+.filter-bar input:focus,
+.filter-bar select:focus,
+.filter-grid input:focus,
+.filter-grid select:focus,
+.ops-grid input:focus,
+.ops-grid select:focus,
+.editor-form input:focus,
+.editor-form select:focus,
+.editor-form textarea:focus,
+.login-panel input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(21, 19, 17, 0.06);
+}
+
+.filter-bar input:disabled,
+.filter-grid input:disabled,
+.ops-grid input:disabled,
+.editor-form input:disabled,
+.editor-form select:disabled {
+  background: var(--surface-3);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   6. 筛选区 / 操作区
+   ========================================================================== */
+.tabs,
+.toolbar-actions,
+.inline-actions,
+.form-actions,
+.auth-switch,
+.auth-audience {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.filter-bar,
+.filter-grid,
+.pager,
+.row-actions,
+.history-row,
+.ops-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.filter-bar,
+.filter-grid {
+  margin-bottom: 16px;
+}
+
+/* 输入类控件等比撑开，按钮保持自身宽度 —— 不再被拉满一行 */
+.filter-bar > input,
+.filter-bar > select,
+.filter-bar > label,
+.filter-grid > input,
+.filter-grid > select,
+.filter-grid > label,
+.ops-grid > input,
+.ops-grid > select,
+.ops-grid > label {
+  flex: 1 1 170px;
+  min-width: 0;
+}
+
+.filter-bar > button,
+.filter-grid > button,
+.ops-grid > button {
+  flex: 0 0 auto;
+}
+
+.toolbar,
+.status-strip {
+  margin-top: 16px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.status-strip p {
+  margin: 0;
+  font-size: var(--fs-base);
+}
+
+.pager {
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.vertical {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.stretch {
+  width: 100%;
+}
+
+.vertical .inline-actions {
+  justify-content: flex-end;
+}
+
+/* ==========================================================================
+   7. 列表与卡片
+   ========================================================================== */
+.table-list {
+  display: grid;
+}
+
+.summary-row,
+.table-row {
+  padding: 16px 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* 摘要行子项纵向居中。默认的 align-items: stretch 会把按内容定尺寸的状态徽标
+   拉到整行高（副标题折成两行的提醒行尤其明显），配 999px 圆角就摊成椭圆甚至正圆。
+   在容器上解决，而不是给徽标加 align-self —— 移动端这一行会变成纵向排列，
+   那时 align-self 会转成横向对齐，把徽标从右缘拉到行中间。 */
+.summary-row {
+  align-items: center;
+}
+
+/* 长串（身份证号、订单号）允许折行，避免把右侧操作按钮挤到第二行 */
+.summary-row > div:first-child,
+.table-row > div:first-child,
+.table-row-body {
+  min-width: 0;
+}
+
+/* 正文列撑满剩余宽度。否则它的宽度由「这一行有几颗操作按钮」决定：
+   3 颗按钮的行文本列只有 303px，5 颗按钮的行有 391px，
+   同一列里几行的副标题可用宽度不一致，折行位置也就对不齐。 */
+.table-row > div:first-child,
+.summary-row > div:first-child {
+  flex: 1 1 auto;
+}
+
+.list-title,
+.list-subtitle {
+  overflow-wrap: anywhere;
+}
+
+.table-row .inline-actions,
+.summary-row .inline-actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
+.summary-row:first-child,
+.table-row:first-child {
+  padding-top: 0;
+}
+
+.summary-row:last-child,
+.table-row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.table-row-active {
+  /* 圆角与内嵌卡片（.ops-card）同档，外扩距离共用 --card-bleed，
+     保证高亮底色和卡片边框落在同一条线上 */
+  border-radius: var(--r-md);
+  background: rgba(241, 238, 231, 0.8);
+  padding-left: var(--card-bleed);
+  padding-right: var(--card-bleed);
+  margin: 0 calc(var(--card-bleed) * -1);
+}
+
+.stat-card,
+.compact-card {
+  min-height: 150px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.stat-card strong {
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
 .trend-strip,
 .chart-grid,
 .profile-grid,
@@ -415,20 +682,28 @@ h2 {
 .compact-card {
   padding: 14px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   background: var(--surface-2);
 }
 
 .trend-kpi span,
 .chart-bar-card small {
+  font-size: var(--fs-sm);
   color: var(--muted);
 }
 
 .trend-kpi strong {
   display: block;
   margin-top: 8px;
-  font-size: 24px;
-  letter-spacing: -0.03em;
+  font-size: var(--fs-xl);
+  letter-spacing: -0.02em;
+}
+
+.trend-kpi small {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+  color: var(--muted);
 }
 
 .chart-grid {
@@ -454,6 +729,10 @@ h2 {
   gap: 10px;
 }
 
+.chart-bar-card strong {
+  font-size: var(--fs-sm);
+}
+
 .chart-bar {
   height: 96px;
   display: flex;
@@ -467,49 +746,23 @@ h2 {
   background: linear-gradient(180deg, #1d1a16 0%, #6d665f 100%);
 }
 
-.table-list {
-  display: grid;
-}
-
-.summary-row,
-.table-row {
-  padding: 16px 0;
-  display: flex;
+.history-row {
   justify-content: space-between;
-  gap: 14px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--line);
 }
 
-.summary-row:first-child,
-.table-row:first-child {
-  padding-top: 0;
-}
-
-.summary-row:last-child,
-.table-row:last-child {
-  padding-bottom: 0;
+.history-row:last-child {
   border-bottom: 0;
 }
 
-.table-row-active {
-  border-radius: 10px;
-  background: rgba(241, 238, 231, 0.8);
-  padding-left: 12px;
-  padding-right: 12px;
-  margin: 0 -12px;
+.history-row strong {
+  font-size: var(--fs-base);
 }
 
-.list-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.list-subtitle {
-  margin: 4px 0 0;
-  font-size: 14px;
-}
-
+/* ==========================================================================
+   8. 表单栅格
+   ========================================================================== */
 .editor-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -520,96 +773,44 @@ h2 {
   grid-template-columns: 1fr;
 }
 
-.filter-bar,
-.filter-grid,
-.pager,
-.row-actions,
-.history-row,
-.ops-grid {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.filter-bar,
-.filter-grid {
-  margin-bottom: 16px;
-}
-
-.filter-grid > *,
-.filter-bar > *,
-.ops-grid > * {
-  flex: 1 1 160px;
-}
-
-.pager {
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-}
-
-.history-row {
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.history-row:last-child {
-  border-bottom: 0;
-}
-
-.empty-note {
-  margin: 0;
-  color: var(--muted);
-}
-
 .editor-form label,
-.login-panel label {
+.login-panel label,
+.filter-grid label,
+.filter-bar label,
+.ops-grid label {
   display: grid;
   gap: 8px;
   color: var(--muted);
-  font-size: 14px;
-}
-
-.editor-form input,
-.editor-form select,
-.editor-form textarea,
-.login-panel input {
-  width: 100%;
-  min-height: 46px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
-  color: var(--text);
-  padding: 12px 14px;
-}
-
-.editor-form textarea {
-  min-height: 96px;
-  resize: vertical;
+  font-size: var(--fs-sm);
 }
 
 .full {
   grid-column: 1 / -1;
 }
 
-.vertical {
-  flex-direction: column;
-  align-items: flex-end;
+.form-actions {
+  gap: 10px;
 }
 
+/* ==========================================================================
+   9. 状态徽标
+   ========================================================================== */
 .pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* 徽标按内容定尺寸，不能被横向压缩：
+     否则「即将入住」这类 4 字标签会被挤到文字顶住圆边。
+     纵向不被拉伸由所在行的 align-items 负责（见 .summary-row），
+     不用 align-self —— 父容器可能是纵向 flex，那时它会变成横向对齐。 */
+  flex: 0 0 auto;
   padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 12px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  line-height: 1.2;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
 }
 
 .pill-blue {
@@ -632,6 +833,20 @@ h2 {
   color: var(--pale-red-text);
 }
 
+/* 时间戳：右对齐的等宽灰字，不用 pill（宽文本套胶囊会摊成大圆） */
+.log-time {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding-top: 2px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   10. 房态日历
+   ========================================================================== */
 .calendar-table {
   display: grid;
   gap: 8px;
@@ -644,7 +859,7 @@ h2 {
   gap: 10px 18px;
   margin: -4px 0 16px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .calendar-legend span {
@@ -656,7 +871,7 @@ h2 {
 .legend-dot {
   width: 10px;
   height: 10px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   border: 1px solid var(--border);
 }
 
@@ -694,7 +909,7 @@ h2 {
 
 .calendar-day {
   text-align: center;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted);
 }
 
@@ -706,9 +921,13 @@ h2 {
   cursor: default;
 }
 
+.calendar-cell strong {
+  font-size: var(--fs-sm);
+}
+
 .calendar-cell small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .calendar-available {
@@ -747,7 +966,7 @@ h2 {
 .calendar-tooltip p {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .calendar-tooltip p:first-child {
@@ -760,27 +979,197 @@ h2 {
   transform: translate3d(-50%, 0, 0);
 }
 
-.login-layout {
-  min-height: calc(100dvh - 60px);
+/* ==========================================================================
+   11. 房型图片
+   ========================================================================== */
+.media-row {
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: 28px;
+  grid-template-columns: 148px minmax(0, 1fr);
+  gap: 14px;
   align-items: center;
 }
 
-.tip-card,
-.panel-body {
-  padding: 20px;
+.media-row .table-row-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 
-.login-copy {
+.media-thumb {
+  display: block;
+  width: 148px;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-3);
+}
+
+.media-thumb.is-empty {
   display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.room-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(258px, 1fr));
+  gap: 14px;
+}
+
+.room-card {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+.room-card figure {
+  margin: 0;
+  display: grid;
+  aspect-ratio: 16 / 10;
+  place-items: center;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.room-card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.room-card-body {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+}
+
+.room-card-body .list-subtitle {
+  margin: 0;
+}
+
+.cover-preview {
+  display: grid;
+  gap: 8px;
+}
+
+.cover-preview img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-3);
+}
+
+/* ==========================================================================
+   12. 品牌锁合（图标 + 文字）
+   图标是单色线稿，用 CSS mask + currentColor 上色，墨色跟随正文。
+   ========================================================================== */
+.brand-lockup {
+  display: flex;
+  align-items: flex-start;
   gap: 16px;
-  align-content: center;
-  align-self: center;
-  justify-content: start;
-  width: min(560px, 100%);
-  padding: 0 4px;
+}
+
+.brand-mark {
+  display: block;
+  flex: 0 0 auto;
+  background-color: var(--text);
+  -webkit-mask-image: url('/hotel-mark.svg');
+  mask-image: url('/hotel-mark.svg');
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+/* 登录页：图标墨迹与单行标题墨迹等高，并在同一行内垂直居中 */
+.brand-lockup-title {
+  align-items: center;
+  gap: 18px;
+  font-size: var(--fs-display);
+}
+
+.brand-lockup-title .brand-copy {
+  gap: 0;
+}
+
+.brand-lockup-title .login-title {
+  font-size: 1em;
+}
+
+/* 标题墨迹高 ≈ 0.8736em，除以图标墨迹占比 0.89625 → 0.9747em；
+   -0.0132em 用来抵消盒子居中与墨迹居中之间 0.0066em 的系统偏差。 */
+.brand-mark-login {
+  width: 0.9747em;
+  height: 0.9747em;
+  margin-top: -0.0132em;
+}
+
+/* 内页头部：图标墨迹上沿齐英文行墨迹顶，下沿齐标题墨迹底。
+   文字墨迹高 = 21.53px（英文行墨迹顶→标题墨迹顶，固定）+ 0.886em（标题墨迹高），
+   盒子高 = 墨迹高 / 0.89625 = 24.02px + 0.9886em；
+   再补一个随字号变化的 margin-top，抵消图标自带上留白（2.0625% 盒子高）。 */
+.brand-lockup-header {
+  align-items: flex-start;
+  gap: 14px;
+  font-size: var(--fs-hero);
+}
+
+.brand-lockup-header .compact-copy h1 {
+  font-size: 1em;
+}
+
+.brand-mark-header {
+  width: calc(24.02px + 0.9886em);
+  height: calc(24.02px + 0.9886em);
+  margin-top: calc(3.38px - 0.0204em);
+}
+
+.brand-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.brand-stage {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.poster-shell {
+  display: grid;
+  gap: 20px;
+  width: min(620px, 100%);
+  padding: 8px 0;
+}
+
+.poster-stage {
+  gap: 16px;
+}
+
+.brand-lead {
+  max-width: 42ch;
+  margin-top: 0;
+  font-size: var(--fs-md);
+}
+
+.compact-copy h1 {
+  max-width: none;
+  font-size: var(--fs-hero);
+}
+
+.compact-copy .copy-text {
+  margin-top: 8px;
 }
 
 .brand-notes {
@@ -806,8 +1195,33 @@ h2 {
 .brand-note-index {
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   letter-spacing: 0.1em;
+}
+
+/* ==========================================================================
+   13. 登录页
+   ========================================================================== */
+.login-layout {
+  min-height: calc(100dvh - 60px);
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 28px;
+  align-items: center;
+}
+
+.login-copy {
+  display: grid;
+  gap: 16px;
+  align-content: center;
+  align-self: center;
+  justify-content: start;
+  width: min(620px, 100%);
+  padding: 0 4px;
+}
+
+.login-panel {
+  overflow: hidden;
 }
 
 .login-panel .panel-body {
@@ -816,15 +1230,30 @@ h2 {
   align-content: start;
 }
 
+.panel-body {
+  padding: 20px;
+}
+
+.window-bar {
+  display: flex;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.window-bar span {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-pill);
+  background: #d7d1c8;
+}
+
 .auth-form {
   display: grid;
   gap: 14px;
 }
 
-.auth-switch .tab {
-  flex: 1 1 0;
-}
-
+.auth-switch .tab,
 .auth-audience .tab {
   flex: 1 1 0;
 }
@@ -834,23 +1263,19 @@ h2 {
   border-top: 1px solid var(--line);
 }
 
-.stretch {
-  width: 100%;
-}
-
-.feedback {
-  margin: 0;
-  font-size: 14px;
-}
-
-.feedback.error {
-  color: var(--pale-red-text);
+.tip-card {
+  padding: 20px;
 }
 
 .loading-panel {
   margin-top: 16px;
+  font-size: var(--fs-base);
+  color: var(--muted);
 }
 
+/* ==========================================================================
+   14. 响应式
+   ========================================================================== */
 @media (max-width: 1100px) {
   .hero,
   .panel-grid,
@@ -877,16 +1302,8 @@ h2 {
     flex-direction: column;
   }
 
-  .brand-lockup {
-    align-items: flex-start;
-  }
-
   .login-copy {
     padding: 0;
-  }
-
-  .brand-notes {
-    width: 100%;
   }
 
   .poster-shell {
@@ -934,14 +1351,8 @@ h2 {
     gap: 12px;
   }
 
-  .brand-logo-login {
-    width: 108px;
-    height: 108px;
-  }
-
-  .brand-logo-header {
-    width: 44px;
-    height: 44px;
+  .brand-lockup-title {
+    gap: 12px;
   }
 
   .brand-note {
@@ -951,5 +1362,13 @@ h2 {
 
   .login-title {
     white-space: normal;
+  }
+
+  .media-row {
+    grid-template-columns: 110px minmax(0, 1fr);
+  }
+
+  .media-thumb {
+    width: 110px;
   }
 }

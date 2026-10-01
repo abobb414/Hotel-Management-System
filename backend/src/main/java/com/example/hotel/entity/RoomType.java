@@ -26,4 +26,7 @@ public class RoomType {
     private String description;
 
     private String amenities;
+
+    /** 房型封面图（站点内相对路径或完整 URL） */
+    private String coverImage;
 }

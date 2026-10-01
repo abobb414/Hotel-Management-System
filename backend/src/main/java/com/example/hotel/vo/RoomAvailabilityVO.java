@@ -10,6 +10,8 @@ public class RoomAvailabilityVO {
 
     private String roomNumber;
 
+    private Long roomTypeId;
+
     private Integer floor;
 
     private String cleanStatus;
